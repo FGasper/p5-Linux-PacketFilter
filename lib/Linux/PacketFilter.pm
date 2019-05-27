@@ -153,7 +153,8 @@ order.
 use constant {
     _INSTR_PACK => 'S CC L',
 
-    _INSTR_PACK_n => 'S CC N',
+    _INSTR_PACK_n => (pack('n', 1) eq pack('S', 1)) ? 'S CC n xx' : 'S CC N',
+    _INSTR_PACK_N => 'S CC N',
 
     _ARRAY_PACK => 'S x![P] P',
 };

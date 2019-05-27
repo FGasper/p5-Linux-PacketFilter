@@ -21,23 +21,28 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
         # otherwise, skip a line.
         [ 'jmp jeq', ord('.'), 0, 1 ],
 
-        # If we continued, we'll get here and thus blackhole the packet.
+        # If we continued, we’ll get here and thus reject the packet.
         [ ret => 0 ],
 
-        # If we get here, we skipped a line above, so we'll return
-        # the full packet.
+        # If we get here, we skipped a line above. That means
+        # the packet’s first byte wasn’t an ASCII period,
+        # so we'll return the full packet.
         [ ret => 0xffffffff ],
     );
 
 =head1 DESCRIPTION
 
-This module is a simple, small, pure-Perl compiler for Linux's
+This module is a simple, small, pure-Perl compiler for Linux’s
 Berkeley Packet Filter (BPF) implementation.
 
 =head1 HOW DO I USE THIS?
 
-The best source I have found for learning about BPF itself is the BSD man
-pages; in bpf(4) see the section entitled B<FILTER MACHINE>.
+If you’re familiar with BPF already, the SYNOPSIS above probably makes
+sense “out-of-the-box”. If you’re new to BPF, though, take heart; it’s
+fairly straightforward.
+
+The best source I have found for learning about BPF itself is
+L<bpf(4) in the BSD man pages|; see the section entitled B<FILTER MACHINE>.
 
 Linux-specific implementation notes are available in the kernel
 source tree at L</Documentation/networking/filter.txt|https://www.kernel.org/doc/Documentation/networking/filter.txt>. This contains a lot of detail
@@ -45,10 +50,9 @@ about uses for BPF that don't pertain to packet filtering, though.
 
 L<Here is another helpful guide.|https://web.archive.org/web/20130125231050/http://netsplit.com/2011/02/09/the-proc-connector-and-socket-filters/> Take
 especial note of the need to convert between network and host byte order.
+(See below for a convenience that this module provides for this conversion.)
 
-Once you see what's going on with BPF in general, the SYNOPSIS above will
-make much more sense. Read on for further details about this particular
-implementation.
+You might also take interest in L<the original BPF white paper|http://www.tcpdump.org/papers/bpf-usenix93.pdf>.
 
 =cut
 
@@ -59,10 +63,14 @@ BEGIN {
         w => 0x00,      # 32-bit word
         h => 0x08,      # 16-bit half-word
         b => 0x10,      # 8-bit byte
-        dw => 0x18,     # 64-bit double word
+        # dw => 0x18,     # 64-bit double word
 
         k => 0x00,      # given constant
         x => 0x08,      # index register
+
+        # Conveniences:
+        kn => 0x00,
+        kN => 0x00,
     );
 
     # ld = to accumulator
@@ -106,13 +114,12 @@ BEGIN {
 
 Creates an object that represents an array of instructions for
 the BPF filter machine. Each @filters member is an array reference
-that represents a single instruction. Each array reference has either
-2 or 4 members, which correspond with the BPF_STMT and BPF_JUMP macros,
-respectively.
+that represents a single instruction and has either 2 or 4 members,
+which correspond with the BPF_STMT and BPF_JUMP macros, respectively.
 
-The first member of each array reference is a space-separated string of
-options, lower-cased and without the leading C<BPF_>. So where in C you
-would write:
+The first member of each array reference is, rather than a number,
+a space-separated string of options, lower-cased and without the
+leading C<BPF_>. So where in C you would write:
 
     BPF_LD | BPF_W | BPF_ABS
 
@@ -121,8 +128,8 @@ would write:
     'ld w abs'
 
 Note that, in Linux anyway, the C<ld>, C<w>, C<imm>, C<add>, C<ja>, and C<k>
-options are all 0, so strictly speaking, you do not need to give these;
-thus, you could write the above as just:
+options are all numerically 0, so strictly speaking, you do not need to give
+these; thus, you could write the above as just:
 
     'abs'
 
@@ -130,10 +137,24 @@ For clarity's sake, though, you should probably avoid being quite so terse.
 :) I find it reasonable to omit C<w> and C<k> but to include everything else
 (so C<'ld abs'> for the above).
 
+=head3 Byte order conversion
+
+Pass your “k” values as scalar references to tell Linux::PacketFilter to
+do a 16-bit or 32-bit byte
+conversion. So, for example, the following:
+
+    [ 'jmp jeq', 'n0x80000000', 1, 0 ]
+
+… will skip a line if the accumulator matches 0x80000000 in network byte
+order.
+
 =cut
 
 use constant {
     _INSTR_PACK => 'S CC L',
+
+    _INSTR_PACK_n => 'S CC N',
+
     _ARRAY_PACK => 'S x![P] P',
 };
 
@@ -148,14 +169,24 @@ sub new {
 
     for my $filter (@_) {
         my $code = 0;
+
+        my $tmpl;
+
         for my $piece ( split m<\s+>, $filter->[0] ) {
             $code |= ($BPF{$piece} // die "Unknown BPF: $piece");
+
+            if ($piece eq 'kn') {
+                $tmpl = _INSTR_PACK_n();
+            }
+            elsif ($piece eq 'kN') {
+                $tmpl = _INSTR_PACK_N();
+            }
         }
 
         substr(
             $buf, $f, _INSTR_LEN(),
             pack(
-                _INSTR_PACK(),
+                ( $tmpl || _INSTR_PACK() ),
                 $code,
                 (@$filter == 2) ? (0, 0, $filter->[1]) : @{$filter}[2, 3, 1],
             ),

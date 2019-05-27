@@ -1,23 +1,39 @@
 package Linux::PacketFilter;
 
+use strict;
+use warnings;
+
+=encoding utf-8
+
 our %BPF;
 
 BEGIN {
     %BPF = (
-        w => 0x00,
-        h => 0x08,
-        b => 0x10,
-        dw => 0x18,
+        w => 0x00,      # 32-bit word
+        h => 0x08,      # 16-bit half-word
+        b => 0x10,      # 8-bit byte
+        dw => 0x18,     # 64-bit double word
 
-        k => 0x00,
-        x => 0x08,
+        k => 0x00,      # given constant
+        x => 0x08,      # index register
     );
 
+    # ld = to accumulator
+    # ldx = to index
+    # st = accumulator to scratch[k]
+    # stx = index to scratch[k]
     my @inst = qw( ld ldx st stx alu jmp ret misc );
     for my $i ( 0 .. $#inst ) {
         $BPF{ $inst[$i] } = $i;
     }
 
+    # Load accumulator:
+    # imm = k
+    # abs = offset into packet
+    # ind = index + k
+    # mem = scratch[k]
+    # len = packet length
+    # msh = IP header length (hack ..)
     my @code = qw( imm abs ind mem len msh );
     for my $i ( 0 .. $#code ) {
         $BPF{ $code[$i] } = ( $i << 5 );
@@ -28,6 +44,9 @@ BEGIN {
         $BPF{ $alu[$i] } = ( $i << 4 );
     }
 
+    # ja = move forward k
+    # jeq = move (A == k) ? jt : jf
+    # jset = (A & k)
     my @j = qw( ja jeq jgt jge jset );
     for my $i ( 0 .. $#j ) {
         $BPF{ $j[$i] } = ( $i << 4 );

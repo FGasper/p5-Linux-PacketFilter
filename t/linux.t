@@ -16,7 +16,7 @@ use Text::Control;
 
 use Linux::PacketFilter ();
 
-sub _do_test {
+sub _unix_socket_tests {
     socketpair my $a, my $b, AF_UNIX(), SOCK_DGRAM(), 0;
 
     # For any packet whose 2nd byte is 'e', return only the first 2 bytes;
@@ -43,7 +43,7 @@ sub _do_test {
 
     # This seems strange .. the filter takes numbers in host order but
     # applies them in network order. That seems inconsistent with Netlink
-    # sockets, where the filter takes numbers in network order.
+    # Connector sockets, where the filter needs numbers in network order.
     my $filter2 = Linux::PacketFilter->new(
         [ 'ld h abs', 0 ],
         [ 'jmp jeq k', 256, 0, 1 ],
@@ -67,7 +67,7 @@ sub _do_test {
             pack('n a*', 257, 's'),
             pack('n a*', 65534, 's'),
         ],
-        '16-bit host/network order',
+        'UNIX socket: 16-bit host/network order',
     ) or diag explain [ map { Text::Control::to_hex($_) } @vals ];
 
     #----------------------------------------------------------------------
@@ -96,15 +96,90 @@ sub _do_test {
                 pack('L a*', 257, 's'),
                 pack('L a*', 65534, 's'),
             ],
-            '32-bit host/network order',
+            'UNIX socket: 32-bit host/network order',
         ) or diag explain [ map { Text::Control::to_hex($_) } @vals ];
     }
+}
+
+sub _netlink_tests {
+    my $AF_NETLINK = 16;
+
+    my $NETLINK_ROUTE = 0;
+    my $RTM_GETLINK = 18;
+    socket my $rtnls, $AF_NETLINK, Socket::SOCK_RAW(), $NETLINK_ROUTE;
+
+    my $filter = Linux::PacketFilter->new(
+        [ 'ld h abs', 4 ],
+        [ 'jmp jeq k_n', 2, 0, 1 ],
+        [ 'ret k', 0xffffffff ],
+        [ 'ret k', 3 ],
+    );
+    $filter->attach($rtnls);
+
+    send( $rtnls,
+        pack( 'L S S L L a*', 16, $RTM_GETLINK, 0x10c, 0, 0 ),
+        0,
+    );
+
+    recv( $rtnls, my $rtnlbuf, 65536, 0 );
+    cmp_ok( length($rtnlbuf), '>', 3, 'Netlink headers match with byte order conversion.' );
+
+    $filter = Linux::PacketFilter->new(
+        [ 'ld h abs', 4 ],
+        [ 'jmp jeq k', 2, 0, 1 ],
+        [ 'ret k', 0xffffffff ],
+        [ 'ret k', 3 ],
+    );
+    $filter->attach($rtnls);
+
+    send( $rtnls,
+        pack( 'L S S L L a*', 16, $RTM_GETLINK, 0x10c, 0, 0 ),
+        0,
+    );
+
+    recv( $rtnls, my $rtnlbuf2, 65536, 0 );
+    is( length($rtnlbuf2), 3, 'Netlink headers do not match without byte order conversion.' );
+    #----------------------------------------------------------------------
+
+    my $NETLINK_USERSOCK = 2;
+    socket my $s, $AF_NETLINK, Socket::SOCK_RAW(), $NETLINK_USERSOCK;
+
+    my $nl_addr = pack 'S x[S] L L', $AF_NETLINK, 0, 0;
+    bind( $s, $nl_addr );
+
+    my $filter2 = Linux::PacketFilter->new(
+        [ 'ld h abs', 0 ],
+        [ 'jmp jeq k', 256, 0, 1 ],
+        [ 'ret k', 0xffffffff ],
+        [ 'ret k', 3 ],
+    );
+
+    $filter2->attach($s);
+
+    send( $s, pack('n a*', 123, 'shortened'), 0, getsockname($s) );
+    send( $s, pack('n a*', 256, 'full'), 0, getsockname($s) );
+    send( $s, pack('n a*', 257, 'shortened'), 0, getsockname($s) );
+    send( $s, pack('n a*', 65534, 'shortened'), 0, getsockname($s) );
+
+    my @vals = map { recv($s, my $b, 512, 0); $b } 1 .. 4;
+    is_deeply(
+        \@vals,
+        [
+            pack('n a*', 123, 's'),
+            pack('n a*', 256, 'full'),
+            pack('n a*', 257, 's'),
+            pack('n a*', 65534, 's'),
+        ],
+        'Netlink socket: 16-bit host/network order',
+    ) or diag explain [ map { Text::Control::to_hex($_) } @vals ];
 }
 
 SKIP: {
     skip 'This test only runs in Linux.' if $^O ne 'linux';
 
-    _do_test();
+    _unix_socket_tests();
+
+    _netlink_tests();
 }
 
 done_testing();

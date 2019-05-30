@@ -9,8 +9,8 @@ use Test::FailWarnings;
 use_ok('Linux::PacketFilter');
 
 my $filter = Linux::PacketFilter->new(
-    [ 'ld k_N', 0x80000000 ],
-    [ 'ld k_n', 0x8000 ],
+    [ 'ld k_n32', 0x80000000 ],
+    [ 'ld k_n16', 0x8000 ],
 );
 
 # Only for testing; don’t read $filter internals in production code!

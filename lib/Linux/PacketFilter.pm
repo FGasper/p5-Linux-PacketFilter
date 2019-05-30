@@ -20,8 +20,8 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
         [ 'ld b abs', 0 ],
 
         # If the accumulator value is an ASCII period, continue;
-        # otherwise, skip a line.
-        [ 'jmp jeq', ord('.'), 0, 1 ],
+        # otherwise, skip a line. (See below for what “k8” means.)
+        [ 'jmp jeq k8', ord('.'), 0, 1 ],
 
         # If we continued, we’ll get here and thus reject the packet.
         [ ret => 0 ],
@@ -41,7 +41,7 @@ This module is a simple, small, pure-Perl compiler for Linux’s
 
 =head1 HOW TO USE THIS MODULE
 
-If you’re familiar with BPF already, the SYNOPSIS above probably makes
+If you’re familiar with BPF already, the SYNOPSIS above should mostly make
 sense “out-of-the-box”. If you’re new to BPF, though, take heart; it’s
 fairly straightforward.
 
@@ -77,8 +77,9 @@ sub _populate_BPF {
         x => 0x08,      # index register
 
         # Conveniences:
-        k_n => 0x00,
-        k_N => 0x00,
+        k_n8  => 0x00,
+        k_n16 => 0x00,
+        k_n32 => 0x00,
     );
 
     # ld = to accumulator
@@ -162,14 +163,30 @@ packet filtering, Linux::PacketFilter adds a convenience for this:
 the codes C<k_n> and C<k_N> indicate to encode the given constant value
 in 16-bit or 32-bit network byte order, respectively.
 
+Note that Linux I<always> consumes BPF instruction constants in
+B<network order>. Thus, if you’re on a little-endian system, to
+match against numbers that are in host order (e.g., numbers in Netlink
+headers) you’ll need to do a byte-order conversion.
+
+To add to the fun: when BPF compares a 16- or 8-bit number from “k”,
+it expects to do so from the first available register. This works fine
+on little-endian systems, but on big-endian systems that means
+It would be more natural for this module to encode the constants
+in network order; however, that would also put it at variance with C
+implementations, which would compromise the usefulness of existing
+documentation.
+
 =cut
+
+use constant _is_big_endian => pack('n', 1) eq pack('S', 1);
 
 use constant {
     _INSTR_PACK => 'S CC L',
 
     _NETWORK_INSTR_PACK => {
-        'k_n' => (pack('n', 1) eq pack('S', 1)) ? 'S CC N' : 'S CC n xx',
-        'k_N' => 'S CC N',
+        'k_n8'  => _is_big_endian ? 'S CC N' : 'S CC C x3',
+        'k_n16' => _is_big_endian ? 'S CC N' : 'S CC n x2',
+        'k_n32' => 'S CC N',
     },
 
     _ARRAY_PACK => 'S x![P] P',

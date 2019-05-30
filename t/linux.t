@@ -108,9 +108,10 @@ sub _netlink_tests {
     my $RTM_GETLINK = 18;
     socket my $rtnls, $AF_NETLINK, Socket::SOCK_RAW(), $NETLINK_ROUTE;
 
+    # Note!!! For Netlink headers we have to give “k” in network order.
     my $filter = Linux::PacketFilter->new(
         [ 'ld h abs', 4 ],
-        [ 'jmp jeq k_n', 2, 0, 1 ],
+        [ 'jmp jeq k_n16', 2, 0, 1 ],
         [ 'ret k', 0xffffffff ],
         [ 'ret k', 3 ],
     );

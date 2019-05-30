@@ -11,8 +11,8 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
         [ 'ld b abs', 0 ],
 
         # If the accumulator value is an ASCII period, continue;
-        # otherwise, skip a line.
-        [ 'jmp jeq', ord('.'), 0, 1 ],
+        # otherwise, skip a line. (See below for what “k8” means.)
+        [ 'jmp jeq k8', ord('.'), 0, 1 ],
 
         # If we continued, we’ll get here and thus reject the packet.
         [ ret => 0 ],
@@ -32,7 +32,7 @@ This module is a simple, small, pure-Perl compiler for Linux’s
 
 # HOW TO USE THIS MODULE
 
-If you’re familiar with BPF already, the SYNOPSIS above probably makes
+If you’re familiar with BPF already, the SYNOPSIS above should mostly make
 sense “out-of-the-box”. If you’re new to BPF, though, take heart; it’s
 fairly straightforward.
 
@@ -88,6 +88,19 @@ Since it’s common to need to do byte order conversions with
 packet filtering, Linux::PacketFilter adds a convenience for this:
 the codes `k_n` and `k_N` indicate to encode the given constant value
 in 16-bit or 32-bit network byte order, respectively.
+
+Note that Linux _always_ consumes BPF instruction constants in
+**network order**. Thus, if you’re on a little-endian system, to
+match against numbers that are in host order (e.g., numbers in Netlink
+headers) you’ll need to do a byte-order conversion.
+
+To add to the fun: when BPF compares a 16- or 8-bit number from “k”,
+it expects to do so from the first available register. This works fine
+on little-endian systems, but on big-endian systems that means
+It would be more natural for this module to encode the constants
+in network order; however, that would also put it at variance with C
+implementations, which would compromise the usefulness of existing
+documentation.
 
 ## $ok = _OBJ_->attach( $SOCKET )
 

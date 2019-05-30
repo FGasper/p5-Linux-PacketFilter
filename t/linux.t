@@ -75,7 +75,7 @@ sub _unix_socket_tests {
     {
         my $filter3 = Linux::PacketFilter->new(
             [ 'ld w abs', 0 ],
-            [ 'jmp jeq k_N', 256, 0, 1 ],
+            [ 'jmp jeq k_n32', 256, 0, 1 ],
             [ 'ret k', 0xffffffff ],
             [ 'ret k', 5 ],
         );

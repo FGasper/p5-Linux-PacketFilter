@@ -69,6 +69,37 @@ sub _do_test {
         ],
         '16-bit host/network order',
     ) or diag explain [ map { Text::Control::to_hex($_) } @vals ];
+
+    #----------------------------------------------------------------------
+
+    # This seems strange .. the filter takes numbers in host order but
+    # applies them in network order. That seems inconsistent with Netlink
+    # sockets, where the filter takes numbers in network order.
+    my $filter3 = Linux::PacketFilter->new(
+        [ 'ld w abs', 0 ],
+        [ 'jmp jeq k_N', 256, 0, 1 ],
+        [ 'ret k', 0xffffffff ],
+        [ 'ret k', 3 ],
+    );
+
+    $filter2->attach($b);
+
+    send( $a, pack('L a*', 123, 'shortened'), 0 );
+    send( $a, pack('L a*', 256, 'full'), 0 );
+    send( $a, pack('L a*', 257, 'shortened'), 0 );
+    send( $a, pack('L a*', 65534, 'shortened'), 0 );
+
+    my @vals = map { recv($b, my $b, 512, 0); $b } 1 .. 4;
+    is_deeply(
+        \@vals,
+        [
+            pack('L a*', 123, 's'),
+            pack('L a*', 256, 'full'),
+            pack('L a*', 257, 's'),
+            pack('L a*', 65534, 's'),
+        ],
+        '32-bit host/network order',
+    ) or diag explain [ map { Text::Control::to_hex($_) } @vals ];
 }
 
 SKIP: {

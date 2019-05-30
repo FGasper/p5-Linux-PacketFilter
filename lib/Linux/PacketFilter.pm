@@ -3,6 +3,8 @@ package Linux::PacketFilter;
 use strict;
 use warnings;
 
+our $VERSION = '0.01_1';
+
 =encoding utf-8
 
 =head1 NAME
@@ -35,7 +37,7 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
 =head1 DESCRIPTION
 
 This module is a simple, small, pure-Perl compiler for Linux’s
-Berkeley Packet Filter (BPF) implementation.
+“classic” Berkeley Packet Filter (BPF) implementation.
 
 =head1 HOW TO USE THIS MODULE
 
@@ -56,6 +58,9 @@ especial note of the need to convert between network and host byte order.
 (See below for a convenience that this module provides for this conversion.)
 
 You might also take interest in L<the original BPF white paper|http://www.tcpdump.org/papers/bpf-usenix93.pdf>.
+
+B<NOTE:> This module works with Linux’s I<“classic”> BPF, not the
+much more powerful (and complex) “extended” BPF.
 
 =cut
 
@@ -132,21 +137,29 @@ leading C<BPF_>. So where in C you would write:
 
     'ld w abs'
 
-Note that, in Linux anyway, the C<ld>, C<w>, C<imm>, C<add>, C<ja>, and C<k>
-options are all numerically 0, so strictly speaking, you do not need to give
-these; thus, you could write the above as just:
+The full list of options for a single instruction is:
 
-    'abs'
+=over
 
-For clarity's sake, though, you should probably avoid being quite so terse.
-:) I find it reasonable to omit C<w> and C<k> but to include everything else
-(so C<'ld abs'> for the above).
+=item * C<b>, C<h>, C<w>, C<x>, C<k>, C<k_n>, C<k_N> (See below for
+an explanation of the last two.)
+
+=item * C<ld>, C<ldx>, C<st>, C<stx>, C<alu>, C<jmp>, C<ret>, C<misc>
+
+=item * C<imm>, C<abs>, C<ind>, C<mem>, C<len>, C<msh>
+
+=item * C<add>, C<sub>, C<mul>, C<div>, C<or>, C<and>, C<lsh>, C<rsh>,
+C<neg>, C<mod>, C<xor>
+
+=item * C<ja>, C<jeq>, C<jgt>, C<jge>, C<jset>
+
+=back
 
 =head3 Byte order conversion
 
-Since it’s quite common to need to do byte order conversions with
+Since it’s common to need to do byte order conversions with
 packet filtering, Linux::PacketFilter adds a convenience for this:
-the code C<k_n> and C<k_N> indicate to encode the given constant value
+the codes C<k_n> and C<k_N> indicate to encode the given constant value
 in 16-bit or 32-bit network byte order, respectively.
 
 =cut
@@ -179,7 +192,7 @@ sub new {
         my $tmpl;
 
         for my $piece ( split m<\s+>, $filter->[0] ) {
-            $code |= ($BPF{$piece} // die "Unknown BPF: $piece");
+            $code |= ($BPF{$piece} // die "Unknown BPF option: “$piece”");
 
             $tmpl ||= _NETWORK_INSTR_PACK()->{$piece};
         }
@@ -241,4 +254,4 @@ L<Linux::SocketFilter::Assembler> suits a similar purpose to this
 module’s but appears to be geared solely toward PF_PACKET sockets.
 It also defines its own language for specifying the filters, which I find
 less helpful than this module’s approach of “porting” the C macros
-to Perl.
+to Perl, thus better capitalizing on existing documention.

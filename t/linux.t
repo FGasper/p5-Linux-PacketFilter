@@ -42,8 +42,9 @@ sub _unix_socket_tests {
     #----------------------------------------------------------------------
 
     # This seems strange .. the filter takes numbers in host order but
-    # applies them in network order. That seems inconsistent with Netlink
-    # Connector sockets, where the filter needs numbers in network order.
+    # applies them in network order. Also consider Netlink Connector
+    # sockets, where the filter needs numbers in network order to apply
+    # them to host-order numbers.
     my $filter2 = Linux::PacketFilter->new(
         [ 'ld h abs', 0 ],
         [ 'jmp jeq k', 256, 0, 1 ],
@@ -75,7 +76,7 @@ sub _unix_socket_tests {
     {
         my $filter3 = Linux::PacketFilter->new(
             [ 'ld w abs', 0 ],
-            [ 'jmp jeq k_n32', 256, 0, 1 ],
+            [ 'jmp jeq k_N', 256, 0, 1 ],
             [ 'ret k', 0xffffffff ],
             [ 'ret k', 5 ],
         );
@@ -111,7 +112,7 @@ sub _netlink_tests {
     # Note!!! For Netlink headers we have to give “k” in network order.
     my $filter = Linux::PacketFilter->new(
         [ 'ld h abs', 4 ],
-        [ 'jmp jeq k_n16', 2, 0, 1 ],
+        [ 'jmp jeq k_n', 2, 0, 1 ],
         [ 'ret k', 0xffffffff ],
         [ 'ret k', 3 ],
     );

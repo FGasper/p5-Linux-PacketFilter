@@ -77,9 +77,8 @@ sub _populate_BPF {
         x => 0x08,      # index register
 
         # Conveniences:
-        k_n8  => 0x00,
-        k_n16 => 0x00,
-        k_n32 => 0x00,
+        k_n => 0x00,
+        k_N => 0x00,
     );
 
     # ld = to accumulator
@@ -142,7 +141,9 @@ The full list of options for a single instruction is:
 
 =over
 
-=item * C<b>, C<h>, C<w>, C<x>, C<k>, C<k_n>, C<k_N> (See below for
+=item * C<b>, C<h>, C<w>
+
+=item * C<x>, C<k>, C<k_n>, C<k_N> (See below for
 an explanation of the last two.)
 
 =item * C<ld>, C<ldx>, C<st>, C<stx>, C<alu>, C<jmp>, C<ret>, C<misc>
@@ -161,20 +162,13 @@ C<neg>, C<mod>, C<xor>
 Since it’s common to need to do byte order conversions with
 packet filtering, Linux::PacketFilter adds a convenience for this:
 the codes C<k_n> and C<k_N> indicate to encode the given constant value
-in 16-bit or 32-bit network byte order, respectively.
+in 16-bit or 32-bit network byte order, respectively. These have the same
+effect as calling C<htons(3)> and C<htonl(3)> in C.
 
-Note that Linux I<always> consumes BPF instruction constants in
-B<network order>. Thus, if you’re on a little-endian system, to
-match against numbers that are in host order (e.g., numbers in Netlink
-headers) you’ll need to do a byte-order conversion.
-
-To add to the fun: when BPF compares a 16- or 8-bit number from “k”,
-it expects to do so from the first available register. This works fine
-on little-endian systems, but on big-endian systems that means
-It would be more natural for this module to encode the constants
-in network order; however, that would also put it at variance with C
-implementations, which would compromise the usefulness of existing
-documentation.
+B<NOTE:> Linux’s exact behavior regarding byte order in BPF isn’t
+always clear, and this module is only tested thus far on little-endian
+systems. It seems that only certain operations, like C<jeq>, require the
+conversion.
 
 =cut
 
@@ -184,9 +178,8 @@ use constant {
     _INSTR_PACK => 'S CC L',
 
     _NETWORK_INSTR_PACK => {
-        'k_n8'  => _is_big_endian ? 'S CC N' : 'S CC C x3',
-        'k_n16' => _is_big_endian ? 'S CC N' : 'S CC n x2',
-        'k_n32' => 'S CC N',
+        'k_n' => _is_big_endian ? 'S CC N' : 'S CC n x2',
+        'k_N' => 'S CC N',
     },
 
     _ARRAY_PACK => 'S x![P] P',

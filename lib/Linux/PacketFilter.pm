@@ -30,19 +30,22 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
         [ ret => 0xffffffff ],
     );
 
+    $filter->apply( $socket );
+
 =head1 DESCRIPTION
 
 This module is a simple, small, pure-Perl compiler for Linux’s
 Berkeley Packet Filter (BPF) implementation.
 
-=head1 HOW DO I USE THIS?
+=head1 HOW TO USE THIS MODULE
 
 If you’re familiar with BPF already, the SYNOPSIS above probably makes
 sense “out-of-the-box”. If you’re new to BPF, though, take heart; it’s
 fairly straightforward.
 
 The best source I have found for learning about BPF itself is
-L<bpf(4) in the BSD man pages|; see the section entitled B<FILTER MACHINE>.
+L<bpf(4) in the BSD man pages|https://man.openbsd.org/bpf.4#Filter_machine>;
+see the section entitled B<FILTER MACHINE>.
 
 Linux-specific implementation notes are available in the kernel
 source tree at L</Documentation/networking/filter.txt|https://www.kernel.org/doc/Documentation/networking/filter.txt>. This contains a lot of detail
@@ -56,9 +59,9 @@ You might also take interest in L<the original BPF white paper|http://www.tcpdum
 
 =cut
 
-our %BPF;
+my %BPF;
 
-BEGIN {
+sub _populate_BPF {
     %BPF = (
         w => 0x00,      # 32-bit word
         h => 0x08,      # 16-bit half-word
@@ -69,8 +72,8 @@ BEGIN {
         x => 0x08,      # index register
 
         # Conveniences:
-        kn => 0x00,
-        kN => 0x00,
+        k_n => 0x00,
+        k_N => 0x00,
     );
 
     # ld = to accumulator
@@ -106,6 +109,8 @@ BEGIN {
     for my $i ( 0 .. $#j ) {
         $BPF{ $j[$i] } = ( $i << 4 );
     }
+
+    return;
 }
 
 =head1 METHODS
@@ -139,22 +144,20 @@ For clarity's sake, though, you should probably avoid being quite so terse.
 
 =head3 Byte order conversion
 
-Pass your “k” values as scalar references to tell Linux::PacketFilter to
-do a 16-bit or 32-bit byte
-conversion. So, for example, the following:
-
-    [ 'jmp jeq', 'n0x80000000', 1, 0 ]
-
-… will skip a line if the accumulator matches 0x80000000 in network byte
-order.
+Since it’s quite common to need to do byte order conversions with
+packet filtering, Linux::PacketFilter adds a convenience for this:
+the code C<k_n> and C<k_N> indicate to encode the given constant value
+in 16-bit or 32-bit network byte order, respectively.
 
 =cut
 
 use constant {
     _INSTR_PACK => 'S CC L',
 
-    _INSTR_PACK_n => (pack('n', 1) eq pack('S', 1)) ? 'S CC N' : 'S CC n xx',
-    _INSTR_PACK_N => 'S CC N',
+    _NETWORK_INSTR_PACK => {
+        'k_n' => (pack('n', 1) eq pack('S', 1)) ? 'S CC N' : 'S CC n xx',
+        'k_N' => 'S CC N',
+    },
 
     _ARRAY_PACK => 'S x![P] P',
 };
@@ -163,6 +166,8 @@ use constant _INSTR_LEN => length( pack _INSTR_PACK() );
 
 sub new {
     my $class = shift;
+
+    _populate_BPF() if !%BPF;
 
     my $buf = ("\0" x (_INSTR_LEN() * @_));
 
@@ -176,12 +181,7 @@ sub new {
         for my $piece ( split m<\s+>, $filter->[0] ) {
             $code |= ($BPF{$piece} // die "Unknown BPF: $piece");
 
-            if ($piece eq 'kn') {
-                $tmpl = _INSTR_PACK_n();
-            }
-            elsif ($piece eq 'kN') {
-                $tmpl = _INSTR_PACK_N();
-            }
+            $tmpl ||= _NETWORK_INSTR_PACK()->{$piece};
         }
 
         substr(
@@ -199,30 +199,46 @@ sub new {
     return bless [ pack(_ARRAY_PACK(), 0 + @_, $buf), $buf ], $class;
 }
 
-=head2 I<OBJ>->attach( $SOCKET )
+=head2 $ok = I<OBJ>->attach( $SOCKET )
 
-Attaches the filter instructions to the socket.
+Attaches the filter instructions to the given $SOCKET.
 
 Note that this class purposely omits public access to the value that
-is given to the underlying C<setsockopt(2)> system call. This is because
+is given to the underlying L<setsockopt(2)> system call. This is because
 that value contains a pointer to a Perl string. That pointer is only valid
-during this object's lifetime, and bad stuff (e.g., segmentation faults)
-can happen when you start using pointers to strings that Perl has already
-deleted.
+during this object’s lifetime, and bad stuff (e.g., segmentation faults)
+can happen when you give the kernel pointers to strings that Perl has
+already garbage-collected.
+
+The return is the same as the underlying call to Perl’s
+L<perlfunc/setsockopt> built-in. C<$!> is set as that function leaves it.
 
 =cut
 
 sub attach {
     my ($self, $socket) = @_;
 
+    # For no good reason, Perl require() clobbers $@ and $!.
     do {
         local ($@, $!);
         require Socket;
     };
 
-    setsockopt $socket, Socket::SOL_SOCKET(), Socket::SO_ATTACH_FILTER(), $self->[0] or die "attach filter: $!";
-
-    return;
+    return setsockopt $socket, Socket::SOL_SOCKET(), Socket::SO_ATTACH_FILTER(), $self->[0];
 }
 
+#----------------------------------------------------------------------
+
 1;
+
+=head1 AUTHOR
+
+Copyright 2019 Gasper Software Consulting (L<http://gaspersoftware.com>)
+
+=head1 SEE ALSO
+
+L<Linux::SocketFilter::Assembler> suits a similar purpose to this
+module’s but appears to be geared solely toward PF_PACKET sockets.
+It also defines its own language for specifying the filters, which I find
+less helpful than this module’s approach of “porting” the C macros
+to Perl.

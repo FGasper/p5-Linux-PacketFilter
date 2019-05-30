@@ -26,8 +26,9 @@ WriteMakefile1(
     ABSTRACT_FROM => 'lib/Linux/PacketFilter.pm',
     LICENSE      => 'perl',
 
-    #Bleh. Hopefully can add support for older versions.
-    MIN_PERL_VERSION => 5.008000,
+    # Require 5.10 because the // operator is handy.
+    # If you need 5.8 support, just ask.
+    MIN_PERL_VERSION => 5.010000,
 
     PREREQ_PM    => {},
 

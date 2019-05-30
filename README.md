@@ -74,7 +74,8 @@ leading `BPF_`. So where in C you would write:
 
 The full list of options for a single instruction is:
 
-- `b`, `h`, `w`, `x`, `k`, `k_n`, `k_N` (See below for
+- `b`, `h`, `w`
+- `x`, `k`, `k_n`, `k_N` (See below for
 an explanation of the last two.)
 - `ld`, `ldx`, `st`, `stx`, `alu`, `jmp`, `ret`, `misc`
 - `imm`, `abs`, `ind`, `mem`, `len`, `msh`
@@ -87,20 +88,13 @@ an explanation of the last two.)
 Since it’s common to need to do byte order conversions with
 packet filtering, Linux::PacketFilter adds a convenience for this:
 the codes `k_n` and `k_N` indicate to encode the given constant value
-in 16-bit or 32-bit network byte order, respectively.
+in 16-bit or 32-bit network byte order, respectively. These have the same
+effect as calling `htons(3)` and `htonl(3)` in C.
 
-Note that Linux _always_ consumes BPF instruction constants in
-**network order**. Thus, if you’re on a little-endian system, to
-match against numbers that are in host order (e.g., numbers in Netlink
-headers) you’ll need to do a byte-order conversion.
-
-To add to the fun: when BPF compares a 16- or 8-bit number from “k”,
-it expects to do so from the first available register. This works fine
-on little-endian systems, but on big-endian systems that means
-It would be more natural for this module to encode the constants
-in network order; however, that would also put it at variance with C
-implementations, which would compromise the usefulness of existing
-documentation.
+**NOTE:** Linux’s exact behavior regarding byte order in BPF isn’t
+always clear, and this module is only tested thus far on little-endian
+systems. It seems that only certain operations, like `jeq`, require the
+conversion.
 
 ## $ok = _OBJ_->attach( $SOCKET )
 

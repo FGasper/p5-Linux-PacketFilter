@@ -20,8 +20,8 @@ Linux::PacketFilter - Simple interface to Linux packet filtering
         [ 'ld b abs', 0 ],
 
         # If the accumulator value is an ASCII period, continue;
-        # otherwise, skip a line. (See below for what “k8” means.)
-        [ 'jmp jeq k8', ord('.'), 0, 1 ],
+        # otherwise, skip a line.
+        [ 'jmp jeq k', ord('.'), 0, 1 ],
 
         # If we continued, we’ll get here and thus reject the packet.
         [ ret => 0 ],

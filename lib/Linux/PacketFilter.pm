@@ -133,7 +133,7 @@ leading C<BPF_>. So where in C you would write:
 
     BPF_LD | BPF_W | BPF_ABS
 
-... in this module you write:
+… in this module you write:
 
     'ld w abs'
 

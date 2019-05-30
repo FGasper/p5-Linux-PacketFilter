@@ -1,4 +1,8 @@
 .gitignore
+LICENSE
+MANIFEST
+Makefile.PL
+README.md
 lib/Linux/PacketFilter.pm
 t/linux.t
 t/pure.t

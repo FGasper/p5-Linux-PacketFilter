@@ -50,7 +50,7 @@ especial note of the need to convert between network and host byte order.
 
 You might also take interest in [the original BPF white paper](http://www.tcpdump.org/papers/bpf-usenix93.pdf).
 
-**NOTE:** This module implements Linux’s _“classic”_ BPF, not the
+**NOTE:** This module works with Linux’s _“classic”_ BPF, not the
 much more powerful (and complex) “extended” BPF.
 
 # METHODS
@@ -113,4 +113,4 @@ Copyright 2019 Gasper Software Consulting ([http://gaspersoftware.com](http://ga
 module’s but appears to be geared solely toward PF\_PACKET sockets.
 It also defines its own language for specifying the filters, which I find
 less helpful than this module’s approach of “porting” the C macros
-to Perl.
+to Perl, thus better capitalizing on existing documention.

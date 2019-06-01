@@ -3,7 +3,7 @@ package Linux::PacketFilter;
 use strict;
 use warnings;
 
-our $VERSION = '0.01_2';
+our $VERSION = '0.01';
 
 =encoding utf-8
 
